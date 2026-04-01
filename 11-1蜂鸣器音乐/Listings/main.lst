@@ -1,0 +1,175 @@
+C51 COMPILER V9.54   MAIN                                                                  03/27/2026 08:15:12 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\MDK\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\
+                    -main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          #include "Delay.h"
+   3          #include "Timer0.h"
+   4          #include "LCD1602.h"
+   5          
+   6          
+   7          sbit Buzzer = P2^5;
+   8          
+   9          // 独立按键引脚
+  10          sbit KEY1 = P3^1;
+  11          sbit KEY2 = P3^0;
+  12          
+  13          // 频率表（不变）初值 = 65536 - ( 11059200 / 12 / 目标频率 ) / 2
+  14          unsigned int code FreqTable[] = {
+  15            0,
+  16            63628,63731,63835,63928,64021,64103,64185, // 低音
+  17            64260,64331,64399,64463,64524,64580,64633, // 中音
+  18            64684,64732,64777,64820,64860,64898,64934, // 高音
+  19          };
+  20          
+  21          // ====================== 歌曲1：Bad Apple!! ======================
+  22          unsigned char code Music_BadApple[] = {
+  23            19,2,  0,1, 18,1, 17,1, 19,1,
+  24            19,2,  0,1, 18,1, 17,1, 19,1,
+  25          
+  26            19,2,  0,1, 18,1, 17,1, 19,1,
+  27            19,1, 20,1, 14,1, 15,1, 14,1, 15,1,
+  28          
+  29            19,2,  0,1, 18,1, 17,1, 19,1,
+  30            19,2,  0,1, 18,1, 17,1, 19,1,
+  31          
+  32            19,2,  0,1, 18,1, 17,1, 19,1,
+  33            15,1, 14,1, 15,1, 14,1, 14,1, 19,1, 14,1,
+  34          
+  35            19,1, 20,1, 14,1, 15,1, 16,1, 19,1, 18,2,
+  36            16,1, 19,1, 16,1, 15,1, 14,1, 20,2,
+  37            19,1, 20,1, 14,1, 15,1, 16,1, 15,1, 14,2,
+  38            20,1, 14,1, 15,1, 16,1, 3,
+  39          
+  40            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  41            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  42            15,1, 14,1, 20,1, 18,1, 19,1, 18,1, 19,2,
+  43            20,1, 14,1, 15,1, 16,1, 19,1, 16,1, 17,2,
+  44          
+  45            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  46            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  47            15,1, 14,1, 20,1, 18,1, 19,1, 18,1, 19,2,
+  48            20,1, 14,1, 15,1, 16,1, 19,1, 16,1, 17,2,
+  49          
+  50            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  51            18,1, 19,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  52            19,1, 20,2,
+  53            27,1, 19,1, 18,1, 16,1, 15,1, 16,1, 15,1, 16,2,
+  54            15,1, 14,1, 20,1, 18,1, 19,1, 16,1, 17,2,
+C51 COMPILER V9.54   MAIN                                                                  03/27/2026 08:15:12 PAGE 2   
+
+  55          
+  56            19,3, 19,1, 19,1,
+  57            19,3, 19,1, 19,1,
+  58            19,3, 19,1, 19,1,
+  59            19,3, 19,1, 19,1,
+  60            19,3, 19,1, 19,1,
+  61            19,3, 19,1, 0,4,
+  62          
+  63            0xFF, 0
+  64          };
+  65          
+  66          // ====================== 歌曲2：天空之城 ======================
+  67          unsigned char code Music_Sky[] = {
+  68            17,2,16,2,17,2,20,2,19,4,17,2,16,2,14,2,
+  69            16,4,17,2,16,2,14,2,12,4,12,2,14,2,16,2,17,2,16,2,14,2,12,2,11,2,12,2,
+  70            14,2,12,2,11,2,9,4,9,2,11,2,12,2,11,2,9,2,7,2,9,2,
+  71            11,2,12,2,14,4,17,2,16,2,14,2,12,2,11,2,12,2,
+  72            14,2,12,2,14,2,17,4,16,2,14,2,12,2,11,2,9,2,7,2,9,2,
+  73            11,2,9,2,7,2,5,4,
+  74            0xFF,0
+  75          };
+  76          
+  77          // ====================== 歌曲选择 ======================
+  78          unsigned char code *MusicList[] = {Music_BadApple, Music_Sky}; // 歌曲列表
+  79          unsigned char SongSelect = 0; // 0=BadApple 1=Sky
+  80          unsigned char Freq = 0;
+  81          unsigned int Time = 0;
+  82          
+  83          
+  84          unsigned char code Name1[] = " BadApple";
+  85          unsigned char code Name2[] = " Sky City";
+  86          // 按键扫描
+  87          void KeyScan()
+  88          {
+  89   1        if(KEY1 == 0)
+  90   1        {
+  91   2          DelayMs(20);
+  92   2          if(KEY1 == 0)
+  93   2          {
+  94   3            SongSelect = 0;  // 按键1 → Bad Apple
+  95   3            Time = 0;        // 从头播放
+  96   3            LCD_ShowString(1,1,Name1);
+  97   3            while(KEY1 == 0);
+  98   3          }
+  99   2        }
+ 100   1        
+ 101   1        if(KEY2 == 0)
+ 102   1        {
+ 103   2          DelayMs(20);
+ 104   2          if(KEY2 == 0)
+ 105   2          {
+ 106   3            SongSelect = 1;  // 按键2 → 天空之城
+ 107   3            Time = 0;        // 从头播放
+ 108   3            LCD_ShowString(1,1,Name2);
+ 109   3            while(KEY2 == 0);
+ 110   3          }
+ 111   2        }
+ 112   1      }
+ 113          
+ 114          void main()
+ 115          {
+ 116   1        Timer0_Init();
+C51 COMPILER V9.54   MAIN                                                                  03/27/2026 08:15:12 PAGE 3   
+
+ 117   1        LCD_Init();
+ 118   1        EA = 1;
+ 119   1        LCD_ShowString(1,1,Name1);
+ 120   1        while(1)
+ 121   1        {
+ 122   2          KeyScan();  // 按键切换歌曲
+ 123   2          
+ 124   2          Freq = MusicList[SongSelect][Time++];
+ 125   2          
+ 126   2          if(Freq == 0xFF)
+ 127   2          {
+ 128   3            Time = 0;
+ 129   3            DelayMs(1000);
+ 130   3          }
+ 131   2          else
+ 132   2          {
+ 133   3            Time0_SetCounter(FreqTable[Freq]);
+ 134   3            Time0_Run(1);
+ 135   3            DelayMs(MusicList[SongSelect][Time++]*130);
+ 136   3            Time0_Run(0);
+ 137   3            Buzzer = 1;
+ 138   3            DelayMs(15);
+ 139   3          }
+ 140   2        }
+ 141   1      }
+ 142          
+ 143          void Timer0_Routine() interrupt 1
+ 144          {
+ 145   1        Time0_SetCounter(FreqTable[Freq]);
+ 146   1        Buzzer = !Buzzer;
+ 147   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    327    ----
+   CONSTANT SIZE    =    527    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      8    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
